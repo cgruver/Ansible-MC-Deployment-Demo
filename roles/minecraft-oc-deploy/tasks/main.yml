@@ -1,0 +1,168 @@
+---
+# tasks file for minecraft-oc-deploy
+- name: Create the Minecraft Namespace
+  community.okd.k8s:
+    name: "mc-{{ minecraft_world }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Create RCON Secret for Minecraft server
+  community.okd.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "mc-{{ minecraft_world }}-secrets"
+        namespace: "mc-{{ minecraft_world }}"
+      type: Opaque
+      stringData:
+        RCON_PASSWORD: "{{ lookup('password', '/dev/null length=16 chars=ascii_letters,digits') }}"
+
+- name: Create Persistent Volume Claim for Minecraft World Data
+  community.okd.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: "mc-{{ minecraft_world }}-world-data-pvc"
+        namespace: "mc-{{ minecraft_world }}"
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "{{ minecraft_persistent_storage_size }}"
+
+- name: Create Minecraft Server Instance
+  community.okd.k8s:
+    state: present
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: "mc-{{ minecraft_world }}-deployment"
+        namespace: "mc-{{ minecraft_world }}"
+        labels:
+          app: "mc-{{ minecraft_world }}"
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: "mc-{{ minecraft_world }}"
+        template:
+          metadata:
+            labels:
+              app: "mc-{{ minecraft_world }}"
+          spec:
+            containers:
+              - name: minecraft-server
+                image: "{{ minecraft_image }}"
+                imagePullPolicy: IfNotPresent
+                ports:
+                  - name: mc
+                    containerPort: "{{ minecraft_port }}"
+                    protocol: TCP
+                  - name: rcon
+                    containerPort: 25575
+                    protocol: TCP
+                env:
+                  - name: EULA
+                    value: "{{ 'TRUE' if minecraft_eula else 'FALSE' }}"
+                  - name: MEMORY
+                    value: "{{ minecraft_memory }}"
+                  - name: GAMEMODE
+                    value: "{{ minecraft_gamemode }}"
+                  - name: DIFFICULTY
+                    value: "{{ minecraft_difficulty }}"
+                  - name: MOTD
+                    value: "{{ minecraft_motd }}"
+                  - name: ENABLE_RCON
+                    value: "{{ 'true' if minecraft_enable_rcon else 'false' }}"
+                  - name: RCON_PORT
+                    value: "25575"
+                  - name: RCON_PASSWORD
+                    valueFrom:
+                      secretKeyRef:
+                        name: "mc-{{ minecraft_world }}-secrets"
+                        key: RCON_PASSWORD
+                  - name: OVERRIDE_SERVER_PROPERTIES
+                    value: "true"
+                  - name: EXTRA_PROPERTIES
+                    value: |-
+                      {% for key, value in minecraft_custom_properties.items() %}
+                      {{ key }}={{ value }}
+                      {% endfor %}
+                volumeMounts:
+                  - name: world-data
+                    mountPath: /data
+            volumes:
+              - name: world-data
+                persistentVolumeClaim:
+                  claimName: "mc-{{ minecraft_world }}-world-data-pvc"
+
+- name: Create LoadBalancer Service for Minecraft Server
+  community.okd.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: "mc-{{ minecraft_world }}-service"
+        namespace: "mc-{{ minecraft_world }}"
+        labels:
+          app: "mc-{{ minecraft_world }}"
+      spec:
+        type: LoadBalancer
+        selector:
+          app: "mc-{{ minecraft_world }}"
+        ports:
+          - name: mc
+            protocol: TCP
+            port: "{{ minecraft_port }}"
+            targetPort: "{{ minecraft_port }}"
+          - name: rcon
+            protocol: TCP
+            port: 25575
+            targetPort: 25575
+
+- name: Validate Minecraft Server Deployment
+  block:
+    - name: Wait for Deployment to have >= 1 ready replica
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        namespace: "mc-{{ minecraft_world }}"
+        name: "mc-{{ minecraft_world }}-deployment"
+      register: mc_deploy
+      retries: 60
+      delay: 5
+      until:
+        - mc_deploy.resources | length == 1
+        - (mc_deploy.resources[0].status.readyReplicas | default(0) | int) >= 1
+
+    - name: Wait for LoadBalancer IP Assignment
+      kubernetes.core.k8s_info:
+        kind: Service
+        namespace: "mc-{{ minecraft_world }}"
+        name: "mc-{{ minecraft_world }}-service"
+      register: service_info
+      until: service_info.resources[0].status.loadBalancer.ingress is defined
+      retries: 10
+      delay: 15
+
+- name: Output Minecraft Server Connection Details
+  block:
+    - name: Gather Service info for outputs
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Service
+        namespace: "mc-{{ minecraft_world }}"
+        name: "mc-{{ minecraft_world }}-service"
+      register: service_info_out
+
+    - name: Set output facts (LB address + connection strings)
+      ansible.builtin.debug:
+        msg: "Minecraft Server IP: {{ service_info_out.resources[0].status.loadBalancer.ingress[0].ip | default('') }}"
