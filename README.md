@@ -44,7 +44,7 @@ ansible-playbook -i inventory minecraft-vm-deploy.yml
 ### Deploy Minecraft to OpenShift
 This playbook deploys Minecraft into an OpenShift cluster using Kubernetes resources:
 ```yaml
-ansible-playbook -i inventory minecraft-oc-deploy.yml
+ansible-playbook minecraft-oc-deploy.yml
 ```
 
 ## Purpose
