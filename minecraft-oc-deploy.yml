@@ -5,13 +5,13 @@
   roles:
     - role: minecraft-oc-deploy
       vars:
-        minecraft_world: "babes-only"
+        minecraft_world: "babies-only"
         minecraft_image: "itzg/minecraft-server:latest" # or a specific version tag
         minecraft_memory: "32G"
         minecraft_port: 25565
         minecraft_gamemode: "creative" # gamemode change doesnt work via deployment
         minecraft_difficulty: "normal"
-        minecraft_motd: "Babes are only allowed!"
+        minecraft_motd: "Babies are only allowed!"
         minecraft_eula: true
         minecraft_enable_rcon: true
         minecraft_custom_properties:

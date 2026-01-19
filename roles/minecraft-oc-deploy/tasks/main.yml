@@ -115,7 +115,8 @@
         labels:
           app: "mc-{{ minecraft_world }}"
       spec:
-        type: LoadBalancer
+        type: ClusterIP
+        ipFamilyPolicy: SingleStack
         selector:
           app: "mc-{{ minecraft_world }}"
         ports:
@@ -127,6 +128,27 @@
             protocol: TCP
             port: 25575
             targetPort: 25575
+
+- name: Create HTTPs Route for Minecraft Server
+  community.okd.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Route
+      metadata:
+        name: "mc-{{ minecraft_world }}-route"
+        namespace: "mc-{{ minecraft_world }}"
+      spec:
+        to:
+          kind: Service
+          name: "mc-{{ minecraft_world }}-service"
+          weight: 100
+        port:
+          targetPort: "{{ minecraft_port }}"
+        tls:
+          termination: edge
+          insecureEdgeTerminationPolicy: Redirect
+        wildcardPolicy: None
 
 - name: Validate Minecraft Server Deployment
   block:
@@ -149,7 +171,7 @@
         namespace: "mc-{{ minecraft_world }}"
         name: "mc-{{ minecraft_world }}-service"
       register: service_info
-      until: service_info.resources[0].status.loadBalancer.ingress is defined
+      until: service_info.resources[0].status.loadBalancer is defined
       retries: 10
       delay: 15
 
@@ -165,4 +187,4 @@
 
     - name: Set output facts (LB address + connection strings)
       ansible.builtin.debug:
-        msg: "Minecraft Server IP: {{ service_info_out.resources[0].status.loadBalancer.ingress[0].ip | default('') }}"
+        msg: "Minecraft Server IP: {{ service_info_out.resources[0].spec.clusterIP | default('') }}"
