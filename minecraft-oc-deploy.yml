@@ -5,13 +5,13 @@
   roles:
     - role: minecraft-oc-deploy
       vars:
-        minecraft_world: "babies-only"
-        minecraft_image: "itzg/minecraft-server:latest" # or a specific version tag
+        minecraft_world: "super-fun-world"
+        minecraft_image: "itzg/minecraft-server:latest"
         minecraft_memory: "32G"
         minecraft_port: 25565
-        minecraft_gamemode: "creative" # gamemode change doesnt work via deployment
+        minecraft_gamemode: "survival"
         minecraft_difficulty: "normal"
-        minecraft_motd: "Babies are only allowed!"
+        minecraft_motd: "Hello and welcome to a super fun world!"
         minecraft_eula: true
         minecraft_enable_rcon: true
         minecraft_custom_properties:
@@ -20,9 +20,3 @@
           simulation-distance: "10"
           level-seed: ""
         minecraft_persistent_storage_size: "20Gi"
-
-    # - role: minecraft-configure
-    #   vars:
-    #     op_usernames: ["AdminPlayer1", "AdminPlayer2"]
-    #     whitelist_usernames: ["PlayerA", "PlayerB", "PlayerC"]
-    #     banned_usernames: ["BadPlayer1", "Griefer42"]
