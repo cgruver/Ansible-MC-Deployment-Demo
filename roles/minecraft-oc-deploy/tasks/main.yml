@@ -3,8 +3,8 @@
 - name: Create the Minecraft Namespace
   community.okd.k8s:
     name: "mc-{{ minecraft_world }}"
-    api_version: v1
-    kind: Namespace
+    api_version: project.openshift.io/v1
+    kind: Project
     state: present
 
 - name: Create RCON Secret for Minecraft server
